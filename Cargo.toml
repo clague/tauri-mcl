@@ -1,0 +1,9 @@
+cargo-features = ["strip"]
+
+[workspace]
+members = ["mc_launcher_core", "src-tauri"]
+resolver = "2"
+
+[profile.release]
+lto = 'fat'
+codegen-units = 1
