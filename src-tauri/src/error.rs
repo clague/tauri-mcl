@@ -4,6 +4,7 @@ use std::convert::From;
 use serde::{Serialize, Serializer};
 use core::fmt::{Debug, Display};
 
+#[derive(Debug)]
 pub struct SerializedError(Error);
 
 pub type Result<T, E = SerializedError> = core::result::Result<T, E>;

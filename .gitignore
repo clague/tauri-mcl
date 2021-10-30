@@ -1,0 +1,10 @@
+/node_modules/
+/public/build/
+mc_launcher_core/versions
+mc_launcher_core/assets
+mc_launcher_core/libraries
+node_modules
+Cargo.lock
+yarn.lock
+target
+package-lock.json

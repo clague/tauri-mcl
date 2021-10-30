@@ -9,7 +9,7 @@ edition = "2021"
 
 [dependencies]
 reqwest = { version = "0.11.6", default-features = true, features = ["json"] }
-tokio = { version = "1.12.0" , features = ["macros"] }
+tokio = { version = "1.12.0" , features = ["macros", "rt", "fs", "rt-multi-thread"] }
 serde = { version = "1.0.130", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0.68", default-features = false }
 anyhow = { version = "1.0.44", default-features = false , features = ["std", "backtrace"] }
@@ -22,3 +22,5 @@ magic-crypt = { version = "3.1.9", default-features = false }
 futures = { version = "0.3.17", default-features = false }
 bytes = { version = "1.1.0", default-features = false }
 tokio-uring = { git = "https://github.com/tokio-rs/tokio-uring", features = ["bytes"] }
+os_info = { version = "3.0.7" }
+zip = { version = "0.5.13" }

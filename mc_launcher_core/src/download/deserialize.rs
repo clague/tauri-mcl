@@ -18,8 +18,7 @@ pub struct Index {
 
 impl<'de> Deserialize<'de> for WrapperVec {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de>,
-    {
+    where D: Deserializer<'de>, {
         struct OuterVisitor;
 
         impl<'de> Visitor<'de> for OuterVisitor {

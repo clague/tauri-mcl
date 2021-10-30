@@ -5,18 +5,20 @@
 
 mod login;
 mod error;
-mod runtime;
+mod state;
+mod download;
+mod statics;
 
-use crate::runtime::AsyncRuntime;
+use login::{login, login_abort};
+use state::MainState;
 
 fn main() {
-    let login_runtime = AsyncRuntime::new();
-
+    let state = MainState::new();
     tauri::Builder::default()
-        .manage(login_runtime)
+        .manage(state)
         .invoke_handler(tauri::generate_handler![
-            commands::login,
-            commands::login_abort,
+            login,
+            login_abort
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

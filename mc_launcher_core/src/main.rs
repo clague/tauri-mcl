@@ -1,15 +1,16 @@
+use futures::TryFutureExt;
 use mc_launcher_core::account::AccountInfo;
 use mc_launcher_core::config::LauncherConfig;
 use mc_launcher_core::download::{*, deserialize::Index};
+use mc_launcher_core::instance::Instance;
 
 use anyhow::{Result, anyhow};
+use mc_launcher_core::instance::deserialize::{DownloadItem, FeatureRule, Library, OsRule, Rule};
 use serde_json::value::Value as Json;
 use tokio::sync::mpsc;
 
 fn main() {
-    tokio_uring::start(run());
-    let mut a = String::new();
-    std::io::stdin().read_line(&mut a);
+    tokio_uring::start(run()).unwrap()
 }
 async fn run() -> Result<()> {
     let mut info = AccountInfo::default();
@@ -22,9 +23,10 @@ async fn run() -> Result<()> {
     // println!("{}", info.refresh_token);
     let MANIFEST_URL = "https://launchermeta.mojang.com/mc/game/version_manifest.json";
     let RESOURCE_URL = "http://resources.download.minecraft.net";
+    //let RESOURCE_URL = "https://bmclapi2.bangbang93.com/assets";
 
     let client = reqwest::Client::new();
-    DownloadTask::new(MANIFEST_URL, "versions/")?.download_file(&client).await?;
+    Task::new(MANIFEST_URL, "versions/", 0).download_file(&client).await?;
 
     let file = std::fs::File::open("versions/version_manifest.json")?;
     let json: Json = serde_json::from_reader(std::io::BufReader::new(file))?;
@@ -33,8 +35,8 @@ async fn run() -> Result<()> {
         if (version["id"]) == "1.17.1" {
             std::fs::create_dir_all("versions/1.17.1")?;
 
-            DownloadTask::new(version["url"].as_str().ok_or(anyhow!("can't parse json!"))?,
-                                "versions/1.17.1/")?
+            Task::new(version["url"].as_str().ok_or(anyhow!("can't parse json!"))?,
+                                "versions/1.17.1/", 0)
                 .download_file(&client)
                 .await?;
             break;
@@ -42,12 +44,11 @@ async fn run() -> Result<()> {
     }
 
     let file = std::fs::File::open("versions/1.17.1/1.17.1.json")?;
-    let json: Json = serde_json::from_reader(std::io::BufReader::new(file))?;
+    let instance: Instance = serde_json::from_reader(std::io::BufReader::new(file))?;
 
     std::fs::create_dir_all("assets/indexes/")?;
 
-    DownloadTask::new(json["assetIndex"]["url"].as_str().ok_or(anyhow!("can't parse json!"))?,
-                    "assets/indexes/")?
+    Task::new(&instance.asset_index.url, "assets/indexes/", instance.asset_index.size)
         .download_file(&client)
         .await?;
 
@@ -57,22 +58,36 @@ async fn run() -> Result<()> {
     let (tx, mut rx) = mpsc::channel(55);
     std::fs::create_dir_all("assets/objects/")?;
 
-    tokio::select! {
-        r = download_objects(RESOURCE_URL, &index.objects.0, "assets/objects/", &tx, 50) => {
-            match r {
-                Ok(_) => println!("Download Complete!"),
-                Err(e) => eprintln!("{}", e),
+    download_objects(RESOURCE_URL, &index.objects.0, "assets/objects/", tx, 3000000, 64).await?;
+    loop {
+        if let Some(progress) = rx.recv().await {
+            if progress.success {
+                println!("received {} bytes of {:#?}", progress.writed, progress.path);
             }
-        },
-        _ = async { 
-            loop {
-                if let Some(progress) = rx.recv().await {
-                    println!("received {}/{}", progress, index.objects.0.len());
-                } else {
-                    eprintln!("channel is closed!");
-                }
+            else {
+                println!("fail in download {:#?} because of {:#?}", progress.path, progress.fail_reason);
             }
-        } => {},
+        } else {
+            println!("download abort!");
+            break;
+        }
+    }
+
+    let (tx, mut rx) = mpsc::channel(55);
+    std::fs::create_dir_all("libraries/")?;
+    download_libraries(&instance, "libraries/", tx, 3000000, 64).await?;
+    loop {
+        if let Some(progress) = rx.recv().await {
+            if progress.success {
+                println!("received {} bytes of {:#?}", progress.writed, progress.path);
+            }
+            else {
+                println!("fail in download {:#?} because of {:#?}", progress.path, progress.fail_reason);
+            }
+        } else {
+            println!("download abort!");
+            break;
+        }
     }
 
     Ok(())

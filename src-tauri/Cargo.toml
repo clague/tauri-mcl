@@ -20,7 +20,10 @@ serde = { version = "1.0", features = ["derive"] }
 tauri = { version = "1.0.0-beta.8", features = ["api-all"] }
 mc_launcher_core = { path = "../mc_launcher_core" }
 anyhow = { version = "1.0.44", default-features = false }
-tokio = { version = "1.12.0", default-features = false , features = ["sync"]}
+tokio = { version = "1.12.0", features = ["sync"]}
+lazy_static = { version = "1.4.0" }
+futures = { version = "0.3.17" }
+parking_lot = { version = "0.11.2" }
 
 [features]
 default = [ "custom-protocol" ]

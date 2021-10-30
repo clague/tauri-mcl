@@ -1,4 +1,6 @@
 use crate::account::AccountInfo;
+use crate::instance::Instance;
+
 use serde::{Serialize, Deserialize};
 use anyhow::{Result};
 use tokio::fs::File;
@@ -7,6 +9,9 @@ use tokio::io::{AsyncWriteExt, AsyncReadExt};
 #[derive(Serialize, Deserialize, Default)]
 pub struct LauncherConfig {
     pub accounts: Vec<AccountInfo>,
+
+    pub download_chunk_size: u64,
+    pub download_parallels_count: u32,
 }
 
 impl LauncherConfig {
