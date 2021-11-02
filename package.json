@@ -31,6 +31,7 @@
   "dependencies": {
     "@kahi-ui/framework": "^0.4.9",
     "@tauri-apps/api": "^1.0.0-beta.8",
+    "animate.css": "^4.1.1",
     "bootstrap": "^5.1.3",
     "sirv-cli": "^1.0.0",
     "svelte-i18n": "^3.3.13"

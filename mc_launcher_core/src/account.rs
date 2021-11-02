@@ -3,10 +3,10 @@ use rand::Rng;
 use serde::{Deserialize, Serialize, ser, de};
 use serde_json::{json, Value as Json};
 use reqwest::{Client as ReqwestClient, header::*};
-use warp::{Filter, http::StatusCode, reply};
+use warp::{Filter, http::Response, reply};
 use chrono::{Utc};
 use magic_crypt::{MagicCryptTrait, new_magic_crypt};
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 
 static MAGIC_KEY: &'static str = "1145141919810";
 
@@ -14,7 +14,7 @@ static MAGIC_KEY: &'static str = "1145141919810";
 pub struct AccountInfo {
     is_valid: bool, // have logined?
     is_default: bool, // default account?
-    uuid: String,
+    pub uuid: String,
 
     pub name: String,
     #[serde(serialize_with = "serialize_string_encrypted", deserialize_with = "deserialize_string_encrypted")]
@@ -56,7 +56,7 @@ impl std::fmt::Display for AccountInfo {
 
 impl AccountInfo {
     const CLIENT_ID: &'static str = "ec20f5c7-5a39-4beb-8844-f0b8df3a0502";
-    const REDIRECT_URI: &'static str = "http%3A%2F%2Flocalhost%3A7878%2Fapi%2Fauth%2Fredirect";
+    const REDIRECT_URI: &'static str = "http%3A%2F%2Flocalhost%3A48324%2Fapi%2Fauth%2Fredirect";
     const AUTHORIZATION_URL: &'static str = "https://login.live.com/oauth20_authorize.srf";
     const TOKEN_URL: &'static str = "https://login.live.com/oauth20_token.srf";
     const XBL_URL: &'static str = "https://user.auth.xboxlive.com/user/authenticate";
@@ -124,7 +124,7 @@ impl AccountInfo {
 
         open::that(auth_url)?;
 
-        let received = listen(7878).await?;
+        let received = listen(48324).await?;
 
         if received.state != state {
             bail!("CSRF token mismatch :(");
@@ -260,37 +260,63 @@ impl AccountInfo {
 }
 
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 struct ReceivedCode {
     pub code: String,
     pub state: String,
 }
 
 async fn listen(port: u16) -> Result<ReceivedCode> {
-    let (tx, mut rx) = mpsc::channel::<ReceivedCode>(1);
+    let (tx, mut rx) = mpsc::channel::<ReceivedCode>(2);
 
-    let route = warp::path!("api" / "auth" / "redirect")
-        .and(warp::query::<ReceivedCode>())
-        .and_then(move |r: ReceivedCode| {
-                let tx = tx.clone();
-                async move {
-                    if r.code.len() > 0 && r.state.len() > 0 {
-                        match tx.send(r).await {
-                            Ok(()) => Ok(reply::with_status("Successfully received code, you can close the tab now.".to_string(), StatusCode::OK)),
-                            Err(_) => Err(warp::reject::reject()),
+    let route = warp::query::<ReceivedCode>()
+        .and(warp::header::<String>("accept-language"))
+        .and_then(move |r: ReceivedCode, accept_lang: String| {
+            let tx = tx.clone();
+            async move {
+                if r.code.is_empty() || r.state.is_empty() {
+                    return Err(warp::reject());
+                }
+                
+                let mut message = "";
+                if !accept_lang.is_empty() {
+                    let langs = accept_lang.split(",");
+                    for lang in langs {
+                        if lang.starts_with("zh_CN") {
+                            message = "你现在可以关闭这个标签了！";
+                            break;
+                        }
+                        else if lang.starts_with("zh") {
+                            message = "你现在可以关闭这个标签了！";
+                            break;
+                        }
+                        else if lang.starts_with("en") {
+                            message = "You can close this tab now!";
+                            break;
                         }
                     }
-                    else {
-                        Err(warp::reject::reject())
-                    }
+                }
+                if message.is_empty() {
+                    message = "You can close this tab now!"
+                }
+                if let Ok(_) = tx.send(r).await {
+                    Ok(Response::builder()
+                        .header(CONTENT_TYPE, "text/html; charset=UTF-8")
+                        .header(CONNECTION, "close")
+                        .body(format!("<h1>{}</h1>", message))
+                    )
+                }
+                else {
+                    Err(warp::reject())
                 }
             }
-        );
+        });
 
-    let server = warp::serve(route).run(([127, 0, 0, 1], port));
+    let server = warp::serve(route).bind(([127, 0, 0, 1], port));
+        //.bind_with_graceful_shutdown(([127, 0, 0, 1], port), async { rx.recv().await; });
 
     tokio::select! {
-        _ = server => Err(anyhow::anyhow!("The server abnormally quit!")),
+        _ = server => Err(anyhow::anyhow!("Server went down unexpectedly!")),
         r = rx.recv() => r.ok_or(anyhow::anyhow!("Can't receive code!")),
         _ = async {
             tokio::time::sleep(tokio::time::Duration::from_secs(120)).await;

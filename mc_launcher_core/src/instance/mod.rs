@@ -1,17 +1,14 @@
-use std::path::PathBuf;
-use futures::stream::Map;
-use serde::{Deserialize, Serialize, de::{self, Visitor}};
+use serde::{Deserialize, de::{self, Visitor}};
 use serde_json::{Value as Json};
-use anyhow::{Result, anyhow};
 
-pub mod deserialize;
-use deserialize::*;
+use crate::deserialize::{LaunchArguments, AssetConfig,
+    MainDownloadItems, JavaVersion, Library, Logging};
 
 #[derive(Deserialize)]
 pub struct Instance {
     pub arguments: LaunchArguments,
     #[serde(rename="assetIndex")]
-    pub asset_index: AssetConfig,
+    pub assets_index: AssetConfig,
     #[serde(rename="downloads")]
     pub main_downloads: MainDownloadItems,
 
@@ -27,18 +24,6 @@ pub struct Instance {
     #[serde(rename="mainClass")]
     pub main_class: String,
 }
-
-// impl InstanceConfig {
-//     async fn from_version_json(json: &Json, condition: &Json) -> Result<(InstanceConfig, ReadResult)> {
-//         let invalid_json_err = anyhow!("Invalid json!");
-//         let allow = false;
-
-//         let if_part = false;
-//         let if_overflow = false;
-        
-        
-//     }
-// }
 
 pub fn deserialize_skip_error<'de, D>(deserializer: D) -> Result<Vec<Library>, D::Error>
 where

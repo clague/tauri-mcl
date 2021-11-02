@@ -9,34 +9,29 @@ use tokio::time::{sleep, Duration};
 use tokio::sync::broadcast;
 
 #[tauri::command]
-pub async fn login(state: tauri::State<'_, MainState>, index: usize) -> Result<()> {
+pub async fn login(state: tauri::State<'_, MainState>, index: usize) -> Result<[String; 2]> {
     let mut info = AccountInfo::default();
     let mut abort = state.login_state.login_abort_sender.subscribe();
 
     tokio::select! {
-        r = info.oauth2_login() => {
+        _ = info.oauth2_login() => {
             println!("I was invoked from js.");
-            return r.map_err(SerializedError::from);
         },
         _ = sleep(Duration::from_secs(60)) => {
             println!("Login timeout!");
             return Err(SerializedError::from("Login Timeout!"));
-        }
-        i = async {
+        },
+        _ = async {
             loop {
-                match abort.recv().await {
-                    Ok(i) => return i,
-                    Err(_) => {}
+                if let Ok(i) = abort.recv().await {
+                    if i == index {
+                        break;
+                    }
                 }
             }
-        } => {
-            if i == index {
-                println!("Login Aborted!");
-                return Err(SerializedError::from("Login Aborted!"));
-            }
-        }
+        } => return Err(SerializedError::from("Login Aborted!"))
     }
-    Ok(())
+    Ok([info.name, info.uuid]) // seems like tauri can't recognize turple, so return array here
 }
 
 #[tauri::command]

@@ -10,6 +10,7 @@ mod download;
 mod statics;
 
 use login::{login, login_abort};
+use download::download_json;
 use state::MainState;
 
 fn main() {
@@ -18,7 +19,8 @@ fn main() {
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             login,
-            login_abort
+            login_abort,
+            download_json,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
