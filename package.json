@@ -29,7 +29,7 @@
     "typescript": "^4.0.0"
   },
   "dependencies": {
-    "@kahi-ui/framework": "^0.4.9",
+    "@kahi-ui/framework": "^0.4.10",
     "@tauri-apps/api": "^1.0.0-beta.8",
     "animate.css": "^4.1.1",
     "bootstrap": "^5.1.3",

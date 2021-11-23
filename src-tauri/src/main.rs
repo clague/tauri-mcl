@@ -9,18 +9,23 @@ mod state;
 mod download;
 mod statics;
 
-use login::{login, login_abort};
+use std::sync::Arc;
+use login::{login, login_abort, get_logged, get_logging, get_active};
 use download::download_json;
 use state::MainState;
+use parking_lot::Mutex;
 
 fn main() {
-    let state = MainState::new();
+    let state = Mutex::new(MainState::new());
     tauri::Builder::default()
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             login,
             login_abort,
             download_json,
+            get_logged,
+            get_logging,
+            get_active,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

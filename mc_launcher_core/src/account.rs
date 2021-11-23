@@ -1,19 +1,20 @@
+use std::net::TcpListener;
+
 use anyhow::{Result, bail};
 use rand::Rng;
 use serde::{Deserialize, Serialize, ser, de};
 use serde_json::{json, Value as Json};
 use reqwest::{Client as ReqwestClient, header::*};
-use warp::{Filter, http::Response, reply};
+use warp::{Filter, http::Response};
 use chrono::{Utc};
 use magic_crypt::{MagicCryptTrait, new_magic_crypt};
-use tokio::sync::{broadcast, mpsc};
+use tokio::{sync::{broadcast, mpsc}};
 
 static MAGIC_KEY: &'static str = "1145141919810";
 
 #[derive(Default, Deserialize, Serialize, Clone)]
 pub struct AccountInfo {
     is_valid: bool, // have logined?
-    is_default: bool, // default account?
     pub uuid: String,
 
     pub name: String,
@@ -56,7 +57,7 @@ impl std::fmt::Display for AccountInfo {
 
 impl AccountInfo {
     const CLIENT_ID: &'static str = "ec20f5c7-5a39-4beb-8844-f0b8df3a0502";
-    const REDIRECT_URI: &'static str = "http%3A%2F%2Flocalhost%3A48324%2Fapi%2Fauth%2Fredirect";
+    const REDIRECT_URI: &'static str = "http%3A%2F%2Flocalhost%3APORT%2Fapi%2Fauth%2Fredirect";
     const AUTHORIZATION_URL: &'static str = "https://login.live.com/oauth20_authorize.srf";
     const TOKEN_URL: &'static str = "https://login.live.com/oauth20_token.srf";
     const XBL_URL: &'static str = "https://user.auth.xboxlive.com/user/authenticate";
@@ -94,9 +95,11 @@ impl AccountInfo {
             let refresh_token = received["refresh_token"].as_str().unwrap_or("");
             
             self.set_refresh_token(refresh_token.to_string());
-            self.last_refresh_time = Utc::now().timestamp();
 
-            self.get_access_token(access_token.to_string()).await // Fetch MC access token
+            // Fetch MC access token
+            self.access_token = AccountInfo::get_access_token(access_token).await?;
+            
+            Ok(())
         }
         else {
             bail!("Not login yet")
@@ -113,18 +116,34 @@ impl AccountInfo {
 
         let reqwest_client = ReqwestClient::new();
 
+        let mut port = 0;
+        for i in 7878..65535 {
+            if let Ok(l) = TcpListener::bind(("127.0.0.1", i)) {
+                port = l.local_addr()?.port();
+                break;
+            }
+        }
+        if port == 0 {
+            bail!("No available port!")
+        }
+        let redirect_uri = AccountInfo::REDIRECT_URI.replace("PORT", &port.to_string());
+
         //Fetch token
         let auth_url = String::from(format!("{}?client_id={}\
             &response_type=code\
             &redirect_uri={}\
             &scope=Xboxlive.signin+Xboxlive.offline_access\
-            &state={}", AccountInfo::AUTHORIZATION_URL, AccountInfo::CLIENT_ID, AccountInfo::REDIRECT_URI, state));
+            &state={}",
+            AccountInfo::AUTHORIZATION_URL,
+            AccountInfo::CLIENT_ID,
+            redirect_uri,
+            state));
 
         println!("Browsing to: {}", auth_url);
 
         open::that(auth_url)?;
 
-        let received = listen(48324).await?;
+        let received = listen(port).await?;
 
         if received.state != state {
             bail!("CSRF token mismatch :(");
@@ -135,7 +154,7 @@ impl AccountInfo {
             client_id={}\
             &code={}\
             &grant_type=authorization_code\
-            &redirect_uri={}", AccountInfo::CLIENT_ID, received.code, AccountInfo::REDIRECT_URI);
+            &redirect_uri={}", AccountInfo::CLIENT_ID, received.code, redirect_uri);
         
         let received: Json = reqwest_client
             .post(AccountInfo::TOKEN_URL)
@@ -150,8 +169,7 @@ impl AccountInfo {
         let refresh_token = received["refresh_token"].as_str().unwrap_or("");
 
         self.set_refresh_token(refresh_token.to_string());
-
-        self.get_access_token(access_token.to_string()).await?; // Fetch MC access token
+        self.access_token = AccountInfo::get_access_token(access_token).await?; // Fetch MC access token
         
         //Check game ownership
         let received: Json = reqwest_client
@@ -182,11 +200,12 @@ impl AccountInfo {
         self.name = name.to_string();
         self.is_valid = true;
 
+        //println!("{}", self);
         Ok(())
     }
 
     //Use Microsoft's token to get minecraft access token
-    async fn get_access_token(&mut self, token: String) -> Result<()> {
+    async fn get_access_token(token: &str) -> Result<String> {
         let reqwest_client = ReqwestClient::new();
 
         //Fetch Xbox token
@@ -252,15 +271,13 @@ impl AccountInfo {
             .json()
             .await?;
 
-        self.access_token = received["access_token"].as_str().unwrap_or("").to_string();
-
-        Ok(())
+        Ok(received["access_token"].as_str().unwrap_or_default().to_string())
     }
 
 }
 
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 struct ReceivedCode {
     pub code: String,
     pub state: String,

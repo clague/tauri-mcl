@@ -1,29 +1,46 @@
 <script>
-  import { Button, Tile , Text, Spinner, Stack, Wave} from "@kahi-ui/framework";
+  import { Popover, ContextButton, Menu, Box, Spinner} from "@kahi-ui/framework";
   import { invoke } from '@tauri-apps/api/tauri';
 
-  export let logged;
-  let logged_index = 0;
-  export let logging;
+  let logged = {};
+  let logging = {};
   let logging_index = 0;
+  let active_uuid = "";
+
+  invoke('get_logged')
+    .then((res) => logged = res)
+    .catch((e) => console.error(e))
+  
+  invoke('get_logging')
+    .then((res) => logging = res)
+    .catch((e) => console.error(e))
+
+  invoke('get_active')
+    .then((res) => active_uuid = res)
+    .catch((e) => console.error(e))
 
   function login() {
     logging_index += 1;
-    let item = { index: logging_index, err_result: "" };
-    logging.push(item);
-    logging = logging;
+    let item = { 
+      index: logging_index,
+      err_message: ""
+    };
+    logging[logging_index.toString()] = item;
+    logging = logging; // refresh page, maybe
 
     invoke("login", { index: item.index })
       .then(res => {
-        logged_index += 1;
-        logged.push({index: logged_index, name: res[0], uuid: res[1]});
-        logging.splice(logging.indexOf(item), 1);
+        logged[res.uuid] = res;
+        if (active_uuid == "") {
+          active_uuid = res.uuid;
+        }
+        delete logging[item.index];
 
         logged = logged;
         logging = logging;
       })
       .catch((err) => {
-        item.err_result = err;
+        item.err_message = err;
         logging = logging;
       })
   }
@@ -37,71 +54,67 @@
         console.error(e)
       });
   };
-
 </script>
-<Stack 
-  class="accouts-stack"
-  orientation="vertical"
+
+<Popover
+  logic_id="popover-account"
+  placement="top"
+  alignment_x="left"
   spacing="medium"
+  dismissible
+  hidden
 >
-  {#each logged as item}
-  <Tile.Container class="account-view" palette="auto" width="">
-    <Tile.Figure shape="rounded">
-      <img src="https://crafatar.com/avatars/{item.uuid}" alt="account avatar"/>
-    </Tile.Figure>
+  <ContextButton id="popover-trigger" palette="accent" variation="outline">
+    {#if active_uuid != ""}
+      <img src="https://crafatar.com/avatars/{active_uuid}" alt="Account avatar">
+      {logged[active_uuid].name}
+    {:else}
+      You haven't logged in yet
+    {/if}
+  </ContextButton>
+  <Box palette="auto" elevation="medium" padding="small" shape="rounded">
+    <Menu.Container id="popover" palette="auto">
+      <Menu.Divider>
+        Account Manager
+      </Menu.Divider>
+      <!-- {#if JSON.stringify(logged) == "{}" && JSON.stringify(logging) == "{}"}
+      <Menu.Label on:click={login}>
+        Press to log in!
+      </Menu.Label>
+      {/if} -->
 
-    <Tile.Section>
-      <Tile.Header>{item.name}</Tile.Header>
+      {#each Object.keys(logged) as uuid}
+      <Menu.Label>
+        {logged[uuid].name}
+      </Menu.Label>
+      {/each}
 
-      <Text is="small">
+      <Menu.Label on:click={login}>
+        Log in
+      </Menu.Label>
+    </Menu.Container>
+  </Box>
+      
+</Popover>
 
-      </Text>
-    </Tile.Section>
+<style type="text/scss">
+  @use "sass:math";
 
-    <Tile.Footer>
-      <Button palette="accent" on:click={() => {
-        logged.splice(logged.indexOf(item), 1);
-        logged = logged;
-      }}>Delete</Button>
-      <Button palette="accent">Refresh</Button>
-    </Tile.Footer>
-  </Tile.Container>
-  {/each}
+  $width: 250px;
+  $height: 40px;
 
-  {#each logging as item}
-  <Tile.Container class="account-view" palette="auto" width="">
-    <Tile.Figure shape="pill">
-      <Spinner />
-    </Tile.Figure>
-
-    <Tile.Section>
-      {#if item.err_result == ""}
-      <Tile.Header>Logging...</Tile.Header>
-      {:else}
-      <Tile.Header>Error!</Tile.Header>
-      <Text is="small">
-        {item.err_result}
-      </Text>
-      {/if}
-    </Tile.Section>
-
-    <Tile.Footer>
-      <Button palette="accent" on:click={() => {
-        login_abort(item.index);
-        logging.splice(logging.indexOf(item), 1);
-        logging = logging;
-      }}>Delete</Button>
-    </Tile.Footer>
-  </Tile.Container>
-  {/each}
-  <Button palette="affirmative" on:click={login}>
-    Login
-  </Button>
-</Stack>
-
-<style>
-  :global(.accouts-stack) {
-    margin: auto;
-    width: 70%;
+  :global(#popover-trigger) {
+    max-width: $width;
+    --button-padding-x: 12px;
+    max-height: $height;
+  }
+  :global(#popover-trigger img) {
+    max-height: math.div($height, 2.0);
+  }
+  :global(#popover) {
+    width: $width;
+  }
+  :global(.account-tile) {
+    width: $width - 20px;
   }
 </style>
