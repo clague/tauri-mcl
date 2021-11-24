@@ -73,7 +73,7 @@ pub async fn login(state: tauri::State<'_, Mutex<MainState>>, index: usize) -> R
         lock.login_state.logging.remove(&index);
 
         if lock.login_state.accounts.is_empty() {
-            lock.login_state.active_account = info.uuid.clone();
+            lock.login_state.active_uuid = info.uuid.clone();
         }
         lock.login_state.accounts.insert(info.uuid.clone(), info);
         drop(lock);
@@ -119,7 +119,26 @@ pub async fn get_logging(state: tauri::State<'_, Mutex<MainState>>) -> Result<Ma
 #[tauri::command]
 pub async fn get_active(state: tauri::State<'_, Mutex<MainState>>) -> Result<String> {
     let lock = state.lock();
-    Ok(lock.login_state.active_account.clone())
+    Ok(lock.login_state.active_uuid.clone())
+}
+
+#[tauri::command]
+pub async fn set_active(state: tauri::State<'_, Mutex<MainState>>, uuid: String) -> Result<()> {
+    let mut lock = state.lock();
+    lock.login_state.active_uuid = uuid;
+    drop(lock);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn delete_account(state: tauri::State<'_, Mutex<MainState>>, uuid: String) -> Result<()> {
+    let mut lock = state.lock();
+    if uuid == lock.login_state.active_uuid {
+        lock.login_state.active_uuid = "".to_owned();
+    }
+    lock.login_state.accounts.remove(&uuid);
+    drop(lock);
+    Ok(())
 }
 
 #[derive(Clone, Serialize)]
@@ -139,7 +158,7 @@ pub struct LoginState {
     pub login_abort_receiver: broadcast::Receiver<usize>,
     pub logging: HashMap<usize, Logging>,
     pub accounts: HashMap<String, AccountInfo>,
-    pub active_account: String, // uuid
+    pub active_uuid: String, // uuid
 }
 
 impl LoginState {
@@ -150,7 +169,7 @@ impl LoginState {
             login_abort_receiver: rx,
             logging: HashMap::with_capacity(5),
             accounts: HashMap::with_capacity(5),
-            active_account: String::new(),
+            active_uuid: String::new(),
         }
     }
 }

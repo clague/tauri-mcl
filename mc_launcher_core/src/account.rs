@@ -116,14 +116,16 @@ impl AccountInfo {
 
         let reqwest_client = ReqwestClient::new();
 
+        let mut port_holder = None;
         let mut port = 0;
         for i in 7878..65535 {
             if let Ok(l) = TcpListener::bind(("127.0.0.1", i)) {
                 port = l.local_addr()?.port();
+                port_holder = Some(l);
                 break;
             }
         }
-        if port == 0 {
+        if port_holder.is_none() {
             bail!("No available port!")
         }
         let redirect_uri = AccountInfo::REDIRECT_URI.replace("PORT", &port.to_string());
@@ -143,7 +145,7 @@ impl AccountInfo {
 
         open::that(auth_url)?;
 
-        let received = listen(port).await?;
+        let received = listen(port_holder.unwrap()).await?;
 
         if received.state != state {
             bail!("CSRF token mismatch :(");
@@ -283,7 +285,7 @@ struct ReceivedCode {
     pub state: String,
 }
 
-async fn listen(port: u16) -> Result<ReceivedCode> {
+async fn listen(port_holder: TcpListener) -> Result<ReceivedCode> {
     let (tx, mut rx) = mpsc::channel::<ReceivedCode>(2);
 
     let route = warp::query::<ReceivedCode>()
@@ -329,6 +331,8 @@ async fn listen(port: u16) -> Result<ReceivedCode> {
             }
         });
 
+    let port = port_holder.local_addr()?.port();
+    drop(port_holder);
     let server = warp::serve(route).bind(([127, 0, 0, 1], port));
         //.bind_with_graceful_shutdown(([127, 0, 0, 1], port), async { rx.recv().await; });
 

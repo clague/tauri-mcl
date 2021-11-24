@@ -1,5 +1,5 @@
 <script>
-  import { Popover, ContextButton, Menu, Box, Spinner} from "@kahi-ui/framework";
+  import { Popover, ContextButton, Menu, Box, Spinner, Spacer} from "@kahi-ui/framework";
   import { invoke } from '@tauri-apps/api/tauri';
 
   let logged = {};
@@ -46,14 +46,32 @@
   }
 
   function login_abort(index) {
-    invoke('login_abort', { index: index })
+    invoke('login_abort', { index: parseInt(index, 10) })
       .then((res) => {
         console.log(`Message: ${res}`)
       })
       .catch((e) => {
         console.error(e)
       });
-  };
+  }
+
+  function delete_account(uuid) {
+    delete logged[uuid];
+    logged = logged;
+
+    if (uuid == active_uuid) {
+      if (Object.keys(logged).length == 0) {
+        active_uuid = "";
+      }
+      else {
+        active_uuid = Object.keys(logged)[0];
+      }
+    }
+    invoke('delete_account', { uuid: uuid })
+      .catch((e) => {
+        console.error(e)
+      });
+  }
 </script>
 
 <Popover
@@ -72,21 +90,51 @@
       You haven't logged in yet
     {/if}
   </ContextButton>
+
   <Box palette="auto" elevation="medium" padding="small" shape="rounded">
     <Menu.Container id="popover" palette="auto">
       <Menu.Divider>
         Account Manager
       </Menu.Divider>
-      <!-- {#if JSON.stringify(logged) == "{}" && JSON.stringify(logging) == "{}"}
-      <Menu.Label on:click={login}>
-        Press to log in!
-      </Menu.Label>
-      {/if} -->
 
       {#each Object.keys(logged) as uuid}
-      <Menu.Label>
+      <Menu.Label active={uuid == active_uuid} palette="affirmative">
         {logged[uuid].name}
+        <Spacer/>
+        <img
+          on:click={() => {delete_account(uuid)}}
+          on:focus={() => 0}
+          on:blur={() => 0}
+          on:mouseover={(event) => {
+            event.target.setAttribute('src', "assets/img/trash-fill.svg")
+          }}
+          on:mouseout={(event) => {
+            event.target.setAttribute('src', "assets/img/trash.svg")
+          }}
+          src="assets/img/trash.svg"
+          alt="Delete account"/>
       </Menu.Label>
+      {/each}
+
+      {#each Object.keys(logging) as index}
+      {#if logging[index].err_message == ""}
+      <Menu.Label>
+        <Spinner/>Processing...
+        <Spacer/>
+        <img
+          on:click={() => {login_abort(index)}}
+          on:focus={() => 0}
+          on:blur={() => 0}
+          on:mouseover={(event) => {
+            event.target.setAttribute('src', "assets/img/trash-fill.svg")
+          }}
+          on:mouseout={(event) => {
+            event.target.setAttribute('src', "assets/img/trash.svg")
+          }}
+          src="assets/img/trash.svg"
+          alt="Abort logging"/>
+      </Menu.Label>
+      {/if}
       {/each}
 
       <Menu.Label on:click={login}>
@@ -94,7 +142,6 @@
       </Menu.Label>
     </Menu.Container>
   </Box>
-      
 </Popover>
 
 <style type="text/scss">

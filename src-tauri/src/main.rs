@@ -3,16 +3,15 @@
   windows_subsystem = "windows"
 )]
 
-mod login;
-mod error;
-mod state;
-mod download;
-mod statics;
+pub mod login;
+pub mod error;
+pub mod state;
+pub mod download;
+pub mod statics;
 
-use std::sync::Arc;
-use login::{login, login_abort, get_logged, get_logging, get_active};
-use download::download_json;
-use state::MainState;
+use crate::login::{login, login_abort, get_logged, get_logging, get_active, set_active, delete_account};
+use crate::download::download_json;
+use crate::state::MainState;
 use parking_lot::Mutex;
 
 fn main() {
@@ -26,6 +25,8 @@ fn main() {
             get_logged,
             get_logging,
             get_active,
+            set_active,
+            delete_account,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
